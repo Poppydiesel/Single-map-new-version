@@ -15,6 +15,76 @@
       --gold:#A08C59;
     }
     html, body { height: 100%; margin: 0; }
+    <!-- MOVE MOTORCYCLES — Navy tiled baselayer logo -->
+<style>
+  /* Layer order: tiles < brand logo < vectors < controls */
+  .leaflet-tile-pane { z-index: 200; }
+  .leaflet-pane.brand-pane { z-index: 340; }   /* logo layer */
+  .leaflet-overlay-pane { z-index: 400; }
+  .leaflet-control-container { z-index: 1000; }
+
+  /* Navy diagonal logo style */
+  #brandTiles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;                             /* subtle opacity */
+    background-image: url('Move Motorcycles Blue.png.png'); /* your navy logo file */
+    background-repeat: repeat;
+    background-size: 260px 260px;              /* adjust tile size if you wish */
+    transform: rotate(-30deg);
+    transform-origin: center center;
+  }
+</style>
+
+<script>
+(function(){
+  // Safely find the Leaflet map instance
+  function getMapRef(){
+    try{
+      if (typeof map !== 'undefined' && map && map.eachLayer) return map;
+      if (window.map && window.map.eachLayer) return window.map;
+      for (const k in window){
+        const v = window[k];
+        if (v && typeof v.eachLayer==='function' && typeof v.getContainer==='function') return v;
+      }
+    }catch(e){}
+    return null;
+  }
+
+  function mountBrandLogo(){
+    const m = getMapRef();
+    if (!m) return setTimeout(mountBrandLogo, 150); // retry until map is ready
+
+    // Create pane between tiles and overlays
+    if (!m.getPane('brandPane')){
+      m.createPane('brandPane');
+      m.getPane('brandPane').classList.add('brand-pane');
+    }
+
+    // Ensure the logo element exists
+    let wm = document.getElementById('brandTiles');
+    if (!wm){
+      wm = document.createElement('div');
+      wm.id = 'brandTiles';
+    }
+
+    // Append inside the brand pane (true baselayer)
+    const pane = m.getPane('brandPane');
+    if (wm.parentElement !== pane){
+      pane.appendChild(wm);
+    }
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', mountBrandLogo);
+  } else {
+    mountBrandLogo();
+  }
+})();
+</script>
+<!-- /MOVE MOTORCYCLES -->
+
     body { display: grid; grid-template-rows: auto 1fr; background:#0b0f24; color:#eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 
     .toolbar{
@@ -121,24 +191,6 @@
       if(json.status!==200||!json.result) throw new Error(json.error||'Not found');
       return { lat:json.result.latitude, lon:json.result.longitude };
     }
-<style>
-  /* Ensure the map can host absolutely-positioned children */
-  .leaflet-container { position: relative; }
-
-  /* Brand tiled logo overlay (diagonal, subtle, static) */
-  #brandTiles{
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.25;           /* per your master style */
-    z-index: 360;            /* above tile pane (~200), below overlays/markers */
-    background-image: url('data:image/png;base64,PASTE_YOUR_BASE64_HERE'); /* use your big data URL */
-    background-repeat: repeat;
-    background-size: 220px 220px;  /* tile size */
-    transform: rotate(-25deg) scale(1.15);
-    transform-origin: 50% 50%;
-  }
-</style>
 
     function renderList(){
       const list=document.getElementById('list');
