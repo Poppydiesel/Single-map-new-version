@@ -15,76 +15,6 @@
       --gold:#A08C59;
     }
     html, body { height: 100%; margin: 0; }
-    <!-- MOVE MOTORCYCLES — Navy tiled baselayer logo -->
-<style>
-  /* Layer order: tiles < brand logo < vectors < controls */
-  .leaflet-tile-pane { z-index: 200; }
-  .leaflet-pane.brand-pane { z-index: 340; }   /* logo layer */
-  .leaflet-overlay-pane { z-index: 400; }
-  .leaflet-control-container { z-index: 1000; }
-
-  /* Navy diagonal logo style */
-  #brandTiles {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.12;                             /* subtle opacity */
-    background-image: url('Move Motorcycles Blue.png.png'); /* your navy logo file */
-    background-repeat: repeat;
-    background-size: 260px 260px;              /* adjust tile size if you wish */
-    transform: rotate(-30deg);
-    transform-origin: center center;
-  }
-</style>
-
-<script>
-(function(){
-  // Safely find the Leaflet map instance
-  function getMapRef(){
-    try{
-      if (typeof map !== 'undefined' && map && map.eachLayer) return map;
-      if (window.map && window.map.eachLayer) return window.map;
-      for (const k in window){
-        const v = window[k];
-        if (v && typeof v.eachLayer==='function' && typeof v.getContainer==='function') return v;
-      }
-    }catch(e){}
-    return null;
-  }
-
-  function mountBrandLogo(){
-    const m = getMapRef();
-    if (!m) return setTimeout(mountBrandLogo, 150); // retry until map is ready
-
-    // Create pane between tiles and overlays
-    if (!m.getPane('brandPane')){
-      m.createPane('brandPane');
-      m.getPane('brandPane').classList.add('brand-pane');
-    }
-
-    // Ensure the logo element exists
-    let wm = document.getElementById('brandTiles');
-    if (!wm){
-      wm = document.createElement('div');
-      wm.id = 'brandTiles';
-    }
-
-    // Append inside the brand pane (true baselayer)
-    const pane = m.getPane('brandPane');
-    if (wm.parentElement !== pane){
-      pane.appendChild(wm);
-    }
-  }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', mountBrandLogo);
-  } else {
-    mountBrandLogo();
-  }
-})();
-</script>
-<!-- /MOVE MOTORCYCLES -->
-
     body { display: grid; grid-template-rows: auto 1fr; background:#0b0f24; color:#eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 
     .toolbar{
@@ -119,23 +49,27 @@
     .iconbtn{cursor:pointer;border:1px solid #2b325a;background:#151a34;color:#d9defc;border-radius:10px;padding:.25rem .4rem;font-size:12px;}
     .muted{color:#93a0ff;opacity:.8;font-size:12px;}
 
-    /* Watermark pane: above tiles, below markers */
-    .wm-pane{ position:absolute; inset:0; z-index:350; pointer-events:none; opacity:.25; }
-    .wm-pane::before{
-      content:"";
-      position:absolute; inset:-200px;
-      background-repeat:repeat;
-      background-size:400px auto;
-      transform:rotate(-35deg); transform-origin:center;
-      opacity:1;
+    /* --- Basemap + panes order --- */
+    .leaflet-tile-pane{ z-index:200 !important; }     /* OSM tiles */
+    .leaflet-pane.brand-pane{ z-index:340; }          /* tiled logo baselayer (added below) */
+    .leaflet-overlay-pane{ z-index:400; }             /* your vectors (polylines) */
+    .leaflet-marker-pane{ z-index:460 !important; }   /* your markers */
+    .leaflet-control-container{ z-index:1000; }       /* UI */
+
+    /* Tiled navy MOVE MOTORCYCLES logo (diagonal) */
+    #brandTiles{
+      position:absolute; inset:0;
+      pointer-events:none;
+      opacity:0.12; /* subtle like master */
+      /* Try both filenames; first that exists will be visible */
       background-image:
         url('Move Motorcycles Blue.png'),
-        url('Move-Motorcycles-Blue.png'),
-        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'><defs><pattern id='p' width='500' height='500' patternUnits='userSpaceOnUse' patternTransform='rotate(-35)'><text x='0' y='60' font-family='Segoe UI, Arial' font-size='48' fill='%23A08C59' opacity='1'>MOVE MOTORCYCLES • MOVE MOTORCYCLES • </text></pattern></defs><rect width='100%' height='100%' fill='url(%23p)'/></svg>");
+        url('Move-Motorcycles-Blue.png');
+      background-repeat:repeat;
+      background-size:260px 260px;
+      transform:rotate(-30deg);
+      transform-origin:center center;
     }
-
-    .leaflet-tile-pane{z-index:200!important;}
-    .leaflet-marker-pane{z-index:460!important;}
   </style>
 </head>
 <body>
@@ -146,8 +80,8 @@
     <button class="btn secondary" id="fitBtn">Fit to pins</button>
     <button class="btn ghost" id="clearBtn">Clear all</button>
   </div>
+
   <div id="map"></div>
-  <div class="wm-pane" aria-hidden="true"></div>
 
   <div class="side" id="side">
     <h3>Active postcodes</h3>
@@ -164,6 +98,25 @@
     const overlayPane = map.getPane('overlayPane');
     if(overlayPane) overlayPane.style.zIndex = 400;
 
+    /* ---------- BRAND LOGO BASELAYER (between tiles and vectors) ---------- */
+    (function mountBrandLogo(){
+      // Create Leaflet pane that sits between tiles and overlays
+      if (!map.getPane('brandPane')) {
+        map.createPane('brandPane');
+        map.getPane('brandPane').classList.add('brand-pane');
+      }
+      // Ensure the watermark element exists
+      let wm = document.getElementById('brandTiles');
+      if (!wm) {
+        wm = document.createElement('div');
+        wm.id = 'brandTiles';
+      }
+      // Mount inside our custom pane
+      const pane = map.getPane('brandPane');
+      if (wm.parentElement !== pane) pane.appendChild(wm);
+    })();
+    /* --------------------------------------------------------------------- */
+
     const markers=new Map();
 
     // Gold ring navy-blue dot pin
@@ -177,7 +130,7 @@
     function normalizePC(input){
       if(!input) return '';
       return input.toUpperCase()
-        .replace(/\\s+/g,'')
+        .replace(/\s+/g,'')
         .replace(/[^A-Z0-9]/g,'')
         .replace(/([A-Z]{1,2}[0-9][0-9A-Z]?)([0-9][A-Z]{2})/,'$1 $2')
         .trim();
@@ -248,7 +201,7 @@
       const input=document.getElementById('pcInput');
       const raw=input.value.trim();
       if(!raw) return;
-      const pcs=raw.split(/[\\n,;]+/).map(s=>normalizePC(s)).filter(Boolean);
+      const pcs=raw.split(/[\n,;]+/).map(s=>normalizePC(s)).filter(Boolean);
       for(const pc of pcs){
         if(markers.has(pc)) continue;
         try{
