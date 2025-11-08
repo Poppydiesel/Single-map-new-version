@@ -63,8 +63,8 @@
       opacity:0.12; /* subtle like master */
       /* Try both filenames; first that exists will be visible */
       background-image:
-        url('Move Motorcycles Blue.png'),
-        url('Move-Motorcycles-Blue.png');
+        url('Move Motorcycles Blue.png.png'),
+        url('Move Motorcycles Blue.png.png');
       background-repeat:repeat;
       background-size:260px 260px;
       transform:rotate(-30deg);
