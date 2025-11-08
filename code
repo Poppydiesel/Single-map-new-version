@@ -121,6 +121,24 @@
       if(json.status!==200||!json.result) throw new Error(json.error||'Not found');
       return { lat:json.result.latitude, lon:json.result.longitude };
     }
+<style>
+  /* Ensure the map can host absolutely-positioned children */
+  .leaflet-container { position: relative; }
+
+  /* Brand tiled logo overlay (diagonal, subtle, static) */
+  #brandTiles{
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.25;           /* per your master style */
+    z-index: 360;            /* above tile pane (~200), below overlays/markers */
+    background-image: url('data:image/png;base64,PASTE_YOUR_BASE64_HERE'); /* use your big data URL */
+    background-repeat: repeat;
+    background-size: 220px 220px;  /* tile size */
+    transform: rotate(-25deg) scale(1.15);
+    transform-origin: 50% 50%;
+  }
+</style>
 
     function renderList(){
       const list=document.getElementById('list');
