@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Move Motorcycles — Postcode Pin Map</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root{
+      --navy:#040C34;
+      --gold:#A08C59;
+    }
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; grid-template-rows: auto 1fr; background:#0b0f24; color:#eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+
+    .toolbar{
+      display:flex;gap:.5rem;align-items:center;
+      padding:.6rem .8rem;border-bottom:1px solid #1e233d;
+      background:linear-gradient(180deg,#0f1634,#0b102a);
+      position:sticky;top:0;z-index:9999;
+    }
+    .brand{font-weight:700;letter-spacing:.4px;color:var(--gold);margin-right:.75rem;}
+    .toolbar input[type="text"]{
+      flex:1 1 420px;min-width:260px;max-width:780px;
+      padding:.6rem .7rem;border-radius:12px;border:1px solid #2a3158;
+      background:#0d1430;color:#eaeaff;outline:none;
+    }
+    .btn{padding:.55rem .8rem;border-radius:12px;border:0;cursor:pointer;font-weight:600;background:var(--gold);color:#111;}
+    .btn.secondary{background:#26315a;color:#e5e8ff;border:1px solid #394474;}
+    .btn.ghost{background:transparent;color:#b9c0ff;border:1px solid #2b325a;}
+    #map{height:100%;width:100%;position:relative;overflow:hidden;}
+
+    .side{
+      position:absolute;right:10px;top:10px;width:320px;max-height:calc(100% - 20px);
+      display:flex;flex-direction:column;gap:.5rem;padding:.7rem;border-radius:14px;
+      background:rgba(10,15,35,.86);border:1px solid rgba(160,140,89,.35);
+      backdrop-filter:blur(6px);box-shadow:0 10px 30px rgba(0,0,0,.35);
+      z-index:10000;
+    }
+    .side h3{margin:.1rem .2rem .2rem;font-size:14px;letter-spacing:.2px;color:#f2e8d0;font-weight:700;}
+    .list{overflow:auto;max-height:46vh;padding:.25rem;border:1px dashed rgba(160,140,89,.35);border-radius:10px;}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.35rem .45rem;border-radius:10px;}
+    .row:hover{background:rgba(160,140,89,.10);}
+    .row .pc{font-weight:700;color:#fff;}
+    .iconbtn{cursor:pointer;border:1px solid #2b325a;background:#151a34;color:#d9defc;border-radius:10px;padding:.25rem .4rem;font-size:12px;}
+    .muted{color:#93a0ff;opacity:.8;font-size:12px;}
+
+    /* Watermark pane: above tiles, below markers */
+    .wm-pane{ position:absolute; inset:0; z-index:350; pointer-events:none; opacity:.25; }
+    .wm-pane::before{
+      content:"";
+      position:absolute; inset:-200px;
+      background-repeat:repeat;
+      background-size:400px auto;
+      transform:rotate(-35deg); transform-origin:center;
+      opacity:1;
+      background-image:
+        url('Move Motorcycles Blue.png'),
+        url('Move-Motorcycles-Blue.png'),
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'><defs><pattern id='p' width='500' height='500' patternUnits='userSpaceOnUse' patternTransform='rotate(-35)'><text x='0' y='60' font-family='Segoe UI, Arial' font-size='48' fill='%23A08C59' opacity='1'>MOVE MOTORCYCLES • MOVE MOTORCYCLES • </text></pattern></defs><rect width='100%' height='100%' fill='url(%23p)'/></svg>");
+    }
+
+    .leaflet-tile-pane{z-index:200!important;}
+    .leaflet-marker-pane{z-index:460!important;}
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="brand">MOVE MOTORCYCLES • Postcode Pins</div>
+    <input id="pcInput" type="text" placeholder="Paste or type a UK postcode e.g. OX4 2EB" />
+    <button class="btn" id="addBtn">Add pin</button>
+    <button class="btn secondary" id="fitBtn">Fit to pins</button>
+    <button class="btn ghost" id="clearBtn">Clear all</button>
+  </div>
+  <div id="map"></div>
+  <div class="wm-pane" aria-hidden="true"></div>
+
+  <div class="side" id="side">
+    <h3>Active postcodes</h3>
+    <div class="list" id="list"></div>
+    <div class="muted">Tip: press <strong>Enter</strong> to add. Click a postcode in the list to fly to it.</div>
+  </div>
+
+  <script>
+    const map=L.map('map',{zoomControl:true}).setView([52.8,-1.6],6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+    const tilePane = map.getPane('tilePane');
+    if(tilePane) tilePane.style.zIndex = 200;
+    const overlayPane = map.getPane('overlayPane');
+    if(overlayPane) overlayPane.style.zIndex = 400;
+
+    const markers=new Map();
+
+    // Gold ring navy-blue dot pin
+    const goldIcon = L.divIcon({
+      className: 'custom-pin',
+      html: '<div style="width:16px;height:16px;border:3px solid var(--gold);background:var(--navy);border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>',
+      iconSize: [16,16],
+      iconAnchor: [8,8]
+    });
+
+    function normalizePC(input){
+      if(!input) return '';
+      return input.toUpperCase()
+        .replace(/\\s+/g,'')
+        .replace(/[^A-Z0-9]/g,'')
+        .replace(/([A-Z]{1,2}[0-9][0-9A-Z]?)([0-9][A-Z]{2})/,'$1 $2')
+        .trim();
+    }
+
+    async function geocodePostcode(pc){
+      const url='https://api.postcodes.io/postcodes/'+encodeURIComponent(pc);
+      const res=await fetch(url);
+      if(!res.ok) throw new Error('Lookup failed');
+      const json=await res.json();
+      if(json.status!==200||!json.result) throw new Error(json.error||'Not found');
+      return { lat:json.result.latitude, lon:json.result.longitude };
+    }
+
+    function renderList(){
+      const list=document.getElementById('list');
+      list.innerHTML='';
+      if(markers.size===0){
+        const p=document.createElement('div');
+        p.className='muted';
+        p.style.padding='.35rem .45rem';
+        p.textContent='No pins yet. Add one above.';
+        list.appendChild(p);
+        return;
+      }
+      const sortedKeys=[...markers.keys()].sort((a,b)=>a.localeCompare(b));
+      sortedKeys.forEach(pc=>{
+        const {marker}=markers.get(pc);
+        const row=document.createElement('div');
+        row.className='row';
+        const left=document.createElement('div');
+        left.innerHTML=`<span class="pc">${pc}</span>`;
+        left.onclick=()=>{map.flyTo(marker.getLatLng(),12);marker.openPopup();};
+        const actions=document.createElement('div');
+        const del=document.createElement('button');
+        del.className='iconbtn';
+        del.textContent='Remove';
+        del.onclick=()=>removePostcode(pc);
+        actions.appendChild(del);
+        row.appendChild(left);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+    }
+
+    function addMarker(pc,lat,lon){
+      const marker=L.marker([lat,lon],{icon:goldIcon}).addTo(map);
+      marker.bindPopup(`<strong>${pc}</strong>`);
+      markers.set(pc,{marker});
+      renderList();
+    }
+
+    function removePostcode(pc){
+      const i=markers.get(pc);
+      if(!i) return;
+      map.removeLayer(i.marker);
+      markers.delete(pc);
+      renderList();
+    }
+
+    function fitToAll(){
+      if(markers.size===0) return;
+      const g=L.featureGroup([...markers.values()].map(v=>v.marker));
+      map.fitBounds(g.getBounds().pad(0.2));
+    }
+
+    async function addFromInput(){
+      const input=document.getElementById('pcInput');
+      const raw=input.value.trim();
+      if(!raw) return;
+      const pcs=raw.split(/[\\n,;]+/).map(s=>normalizePC(s)).filter(Boolean);
+      for(const pc of pcs){
+        if(markers.has(pc)) continue;
+        try{
+          const g=await geocodePostcode(pc);
+          addMarker(pc,g.lat,g.lon);
+        }catch(err){
+          alert(`Could not add ${pc}: ${err.message}`);
+        }
+      }
+      input.value='';
+      fitToAll();
+    }
+
+    document.getElementById('addBtn').onclick=addFromInput;
+    document.getElementById('pcInput').addEventListener('keydown',e=>{if(e.key==='Enter')addFromInput();});
+    document.getElementById('fitBtn').onclick=fitToAll;
+    document.getElementById('clearBtn').onclick=()=>{if(confirm('Remove all pins?'))[...markers.keys()].forEach(removePostcode);};
+  </script>
+</body>
+</html>
