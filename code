@@ -3,128 +3,556 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Move Motorcycles — Postcode Pin Map</title>
+  <title>Postcode Pin Map</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- Play font -->
+  <link href="https://fonts.googleapis.com/css2?family=Play:wght@400;700&display=swap" rel="stylesheet">
+
   <style>
     :root{
       --navy:#040C34;
       --gold:#A08C59;
+      --navy-2:#0b0f24;
+      --panel:#0d1430;
+      /* adjust if your site header is taller/shorter */
+      --header-offset: 90px;
     }
-    html, body { height: 100%; margin: 0; }
-    body { display: grid; grid-template-rows: auto 1fr; background:#0b0f24; color:#eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    html, body { height:100%; margin:0; }
+    body{
+      display:grid;
+      grid-template-columns: 360px 1fr;  /* left toolbar + map */
+      grid-template-rows: 100%;
+      background: var(--navy-2);
+      color:#f6ead2;
+      font-family: "Play", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      min-height: 100vh;
+    }
 
+    /* Left vertical toolbar (offset below your site header) */
     .toolbar{
-      display:flex;gap:.5rem;align-items:center;
-      padding:.6rem .8rem;border-bottom:1px solid #1e233d;
-      background:linear-gradient(180deg,#0f1634,#0b102a);
-      position:sticky;top:0;z-index:9999;
+      display:flex; flex-direction:column;
+      gap:.6rem;
+      padding:.8rem;
+      border-right:1px solid #1e233d;
+      background: linear-gradient(180deg,#0f1634,#0b102a);
+      margin-top: var(--header-offset);
+      position: sticky;
+      top: var(--header-offset);
+      align-self: start;
+      max-height: calc(100vh - var(--header-offset));
+      overflow: auto;
+      box-sizing:border-box;
     }
-    .brand{font-weight:700;letter-spacing:.4px;color:var(--gold);margin-right:.75rem;}
-    .toolbar input[type="text"]{
-      flex:1 1 420px;min-width:260px;max-width:780px;
-      padding:.6rem .7rem;border-radius:12px;border:1px solid #2a3158;
-      background:#0d1430;color:#eaeaff;outline:none;
+
+    .section-title{
+      color:var(--gold);
+      font-weight:700;
+      letter-spacing:.3px;
+      margin:.2rem 0 .35rem;
+      font-size:14px;
     }
-    .btn{padding:.55rem .8rem;border-radius:12px;border:0;cursor:pointer;font-weight:600;background:var(--gold);color:#111;}
-    .btn.secondary{background:#26315a;color:#e5e8ff;border:1px solid #394474;}
-    .btn.ghost{background:transparent;color:#b9c0ff;border:1px solid #2b325a;}
-    #map{height:100%;width:100%;position:relative;overflow:hidden;}
 
-    .side{
-      position:absolute;right:10px;top:10px;width:320px;max-height:calc(100% - 20px);
-      display:flex;flex-direction:column;gap:.5rem;padding:.7rem;border-radius:14px;
-      background:rgba(10,15,35,.86);border:1px solid rgba(160,140,89,.35);
-      backdrop-filter:blur(6px);box-shadow:0 10px 30px rgba(0,0,0,.35);
-      z-index:10000;
+    .row{ display:flex; gap:.5rem; align-items:center; }
+    .stack{ display:flex; flex-direction:column; gap:.5rem; }
+
+    .input, .select, .file{
+      width:100%;
+      background:#0d1430;
+      color:#f6ead2;
+      border:1px solid #2a3158;
+      border-radius:12px;
+      padding:.6rem .7rem;
+      outline:none;
+      box-sizing:border-box;
+      font-family: inherit;
     }
-    .side h3{margin:.1rem .2rem .2rem;font-size:14px;letter-spacing:.2px;color:#f2e8d0;font-weight:700;}
-    .list{overflow:auto;max-height:46vh;padding:.25rem;border:1px dashed rgba(160,140,89,.35);border-radius:10px;}
-    .row{display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.35rem .45rem;border-radius:10px;}
-    .row:hover{background:rgba(160,140,89,.10);}
-    .row .pc{font-weight:700;color:#fff;}
-    .iconbtn{cursor:pointer;border:1px solid #2b325a;background:#151a34;color:#d9defc;border-radius:10px;padding:.25rem .4rem;font-size:12px;}
-    .muted{color:#93a0ff;opacity:.8;font-size:12px;}
+    .input::placeholder{ color:#c8bb95; opacity:.9; }
 
-    /* --- Basemap + panes order --- */
-    .leaflet-tile-pane{ z-index:200 !important; }     /* OSM tiles */
-    .leaflet-pane.brand-pane{ z-index:340; }          /* tiled logo baselayer (added below) */
-    .leaflet-overlay-pane{ z-index:400; }             /* your vectors (polylines) */
-    .leaflet-marker-pane{ z-index:460 !important; }   /* your markers */
-    .leaflet-control-container{ z-index:1000; }       /* UI */
+    /* Narrower postcode box (per your last request) */
+    .input.postcode { max-width: 240px; }
 
-    /* Tiled navy MOVE MOTORCYCLES logo (diagonal) */
-    #brandTiles{
-      position:absolute; inset:0;
-      pointer-events:none;
-      opacity:0.12; /* subtle like master */
-      /* Try both filenames; first that exists will be visible */
-      background-image:
-        url('Move Motorcycles Blue.png.png'),
-        url('Move Motorcycles Blue.png.png');
-      background-repeat:repeat;
-      background-size:260px 260px;
-      transform:rotate(-30deg);
-      transform-origin:center center;
+    .btn{
+      background:var(--gold);
+      color:var(--navy);
+      border:0;
+      border-radius:12px;
+      padding:.55rem .8rem;
+      font-weight:700;
+      cursor:pointer;
+      font-family: inherit;
+      box-shadow:0 2px 0 rgba(0,0,0,.25);
+      user-select:none;
+    }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+    /* File input wrapper — now NARROWER */
+    .filewrap{ position:relative; width:100%; }
+    .filewrap.narrow{ width:200px; } /* << narrowed Choose CSV */
+    .filewrap input[type="file"]{
+      position:absolute; inset:0; opacity:0; cursor:pointer;
+    }
+    .filelabel{
+      width:100%;
+      background:var(--gold);
+      color:var(--navy);
+      border-radius:12px;
+      padding:.55rem .8rem;
+      font-weight:700;
+      box-shadow:0 2px 0 rgba(0,0,0,.25);
+      text-align:center;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* Filter checkboxes */
+    .checks{ display:flex; gap:.5rem; flex-wrap:wrap; }
+    .check{
+      display:flex; align-items:center; gap:.4rem;
+      background:#0d1430; border:1px solid #2a3158; border-radius:12px;
+      padding:.4rem .6rem; color:#f6ead2;
+    }
+    .check input[type="checkbox"],
+    .check input[type="radio"]{
+      accent-color: var(--gold);
+      width:16px; height:16px;
+    }
+
+    /* Summary + failed download */
+    .summary{ font-size:12px; color:#f6ead2; }
+    .summary strong{ color:var(--gold); }
+    .row.split{ display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
+
+    /* Active Jobs list */
+    .jobs{
+      flex:1 1 auto;
+      min-height: 0;
+      overflow:auto;
+      border:1px dashed rgba(160,140,89,.35);
+      border-radius:12px;
+      padding:.4rem;
+      background:rgba(10,15,35,.66);
+    }
+    .job{
+      display:grid;
+      grid-template-columns: 84px 1fr auto;
+      gap:.5rem;
+      align-items:center;
+      padding:.45rem .55rem;
+      border-radius:10px;
+      border:1px solid #2b325a;
+      background:#151a34;
+      margin-bottom:.45rem;
+    }
+    .job:hover{ outline:1px solid rgba(160,140,89,.35); }
+    .job .date{ display:flex; flex-direction:column; align-items:flex-start; color:#f6ead2; }
+    .job .date .label{ font-size:10px; color:#c8bb95; margin-bottom:2px; }
+    .job .date .val{ font-weight:700; color:#f6ead2; }
+    .job .who{ color:#fff; font-weight:700; }
+    .job .pc{ color:#c9d1ff; font-size:12px; }
+    .job .status{
+      font-weight:800; font-size:12px; padding:.25rem .5rem; border-radius:999px;
+      background:var(--gold); color:var(--navy);
+      min-width: 34px; text-align:center;
+    }
+
+    /* Map */
+    #map{ height:100%; width:100%; position:relative; }
+
+    /* Leaflet z-index sanity */
+    .leaflet-tile-pane{ z-index:200 !important; }
+    .leaflet-overlay-pane{ z-index:400 !important; }
+    .leaflet-marker-pane{ z-index:460 !important; }
+    .leaflet-control-container{ z-index:1000 !important; }
+
+    /* Marker badges (B/C/DC) */
+    .pin{
+      width:28px; height:28px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:900; font-size:12px;
+      border:3px solid var(--gold);
+      box-shadow:0 0 6px rgba(0,0,0,.55);
+      color:#fff;
+    }
+    .pin.blue{ background:#1741C9; }   /* B */
+    .pin.orange{ background:#ffb02e; } /* C */
+    .pin.grey{ background:#636a78; }   /* DC */
+
+    @media (max-height: 700px){
+      .toolbar{ padding-bottom: 1.2rem; }
     }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <div class="brand">MOVE MOTORCYCLES • Postcode Pins</div>
-    <input id="pcInput" type="text" placeholder="Paste or type a UK postcode e.g. OX4 2EB" />
-    <button class="btn" id="addBtn">Add pin</button>
-    <button class="btn secondary" id="fitBtn">Fit to pins</button>
-    <button class="btn ghost" id="clearBtn">Clear all</button>
-  </div>
+  <!-- LEFT TOOLBAR -->
+  <aside class="toolbar" id="toolbar">
+    <!-- CSV Import -->
+    <div class="stack">
+      <div class="section-title">CSV Import</div>
+      <div class="filewrap narrow">
+        <div class="filelabel" id="fileLabel">Choose CSV</div>
+        <input id="csvFile" class="file" type="file" accept=".csv" />
+      </div>
+      <div class="row split">
+        <button class="btn" id="importBtn">Import CSV</button>
+        <button class="btn" id="downloadFailedBtn" style="display:none;">Download Failed Rows</button>
+      </div>
+      <div class="summary" id="importSummary"></div>
+    </div>
 
+    <!-- Manual add -->
+    <div class="stack">
+      <div class="section-title">Add a Postcode</div>
+      <div class="row">
+        <input id="pcInput" class="input postcode" type="text" placeholder="Enter postcode" />
+        <button class="btn" id="addBtn">Add</button>
+      </div>
+
+      <!-- Manual status picker (radio) -->
+      <div class="row" style="flex-wrap:wrap;">
+        <div class="section-title" style="margin:0 0 .2rem 0;">Choose Status</div>
+        <div class="checks" role="radiogroup" aria-label="Choose Status">
+          <label class="check"><input type="radio" name="manualStatus" value="B" checked /> B (Booking)</label>
+          <label class="check"><input type="radio" name="manualStatus" value="C" /> C (Collected)</label>
+          <label class="check"><input type="radio" name="manualStatus" value="DC" /> DC (Driver Assigned)</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters (checkboxes) -->
+    <div class="stack">
+      <div class="section-title">Filter & Sort</div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="fB" checked /> B (Booking Received)</label>
+        <label class="check"><input type="checkbox" id="fC" checked /> C (Collected)</label>
+        <label class="check"><input type="checkbox" id="fDC" checked /> DC (Driver Assigned)</label>
+      </div>
+      <div class="summary">Always sorted by Ready Date (desc).</div>
+    </div>
+
+    <!-- Active Jobs -->
+    <div class="stack" style="min-height:0;">
+      <div class="section-title">Active Jobs</div>
+      <div class="jobs" id="jobsList"></div>
+    </div>
+  </aside>
+
+  <!-- MAP -->
   <div id="map"></div>
 
-  <div class="side" id="side">
-    <h3>Active postcodes</h3>
-    <div class="list" id="list"></div>
-    <div class="muted">Tip: press <strong>Enter</strong> to add. Click a postcode in the list to fly to it.</div>
-  </div>
-
   <script>
-    const map=L.map('map',{zoomControl:true}).setView([52.8,-1.6],6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+    /* ============ MAP INIT ============ */
+    const map = L.map('map', { zoomControl:true }).setView([52.8,-1.6], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:'&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-    const tilePane = map.getPane('tilePane');
-    if(tilePane) tilePane.style.zIndex = 200;
-    const overlayPane = map.getPane('overlayPane');
-    if(overlayPane) overlayPane.style.zIndex = 400;
+    /* ============ STATE ============ */
+    const jobs = [];        // {trackingNo,status,address,readyDate,readyDateStr,postcode,lat,lon,marker}
+    let failedRows = [];    // {rowIndex, trackingNo, status, address, readyDate, reason, rawRow}
 
-    /* ---------- BRAND LOGO BASELAYER (between tiles and vectors) ---------- */
-    (function mountBrandLogo(){
-      // Create Leaflet pane that sits between tiles and overlays
-      if (!map.getPane('brandPane')) {
-        map.createPane('brandPane');
-        map.getPane('brandPane').classList.add('brand-pane');
+    /* ============ UI ELEMENTS ============ */
+    const fileInput = document.getElementById('csvFile');
+    const fileLabel = document.getElementById('fileLabel');
+    const importBtn = document.getElementById('importBtn');
+    const downloadFailedBtn = document.getElementById('downloadFailedBtn');
+    const importSummary = document.getElementById('importSummary');
+
+    const pcInput = document.getElementById('pcInput');
+    const addBtn = document.getElementById('addBtn');
+
+    const fB = document.getElementById('fB');
+    const fC = document.getElementById('fC');
+    const fDC = document.getElementById('fDC');
+    const jobsList = document.getElementById('jobsList');
+
+    const manualStatusNodes = () => document.querySelectorAll('input[name="manualStatus"]');
+
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files?.[0];
+      fileLabel.textContent = f ? f.name : 'Choose CSV';
+    });
+
+    function normalizeStatus(s){
+      if(!s) return null;
+      s = String(s).trim().toUpperCase();
+      if(s === 'B' || s === 'BOOKING' || s === 'BOOKING RECEIVED') return 'B';
+      if(s === 'C' || s === 'COLLECTED') return 'C';
+      if(s === 'DC' || s === 'DRIVER ASSIGNED' || s === 'DRIVER ASSIGNED FOR COLLECTION') return 'DC';
+      return null;
+    }
+
+    function extractPostcode(text){
+      if(!text) return null;
+      const s = String(text).toUpperCase();
+      const m = s.match(/\b([A-Z]{1,2}\d[A-Z0-9]?)\s?(\d[A-Z]{2})\b/);
+      if(!m) return null;
+      return (m[1] + ' ' + m[2]).trim();
+    }
+
+    function parseDateAny(d){
+      if(!d) return null;
+      let s = String(d).trim();
+      const dm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if(dm){
+        const dd = parseInt(dm[1],10), mm = parseInt(dm[2],10)-1, yy = parseInt(dm[3],10);
+        const fullY = yy < 100 ? 2000 + yy : yy;
+        const dt = new Date(Date.UTC(fullY, mm, dd));
+        return isNaN(dt) ? null : dt;
       }
-      // Ensure the watermark element exists
-      let wm = document.getElementById('brandTiles');
-      if (!wm) {
-        wm = document.createElement('div');
-        wm.id = 'brandTiles';
+      const dt = new Date(s);
+      return isNaN(dt) ? null : dt;
+    }
+
+    function fmtDaySuffix(day){
+      const j = day % 10, k = day % 100;
+      if(j===1 && k!==11) return 'st';
+      if(j===2 && k!==12) return 'nd';
+      if(j===3 && k!==13) return 'rd';
+      return 'th';
+    }
+    function fmtReadyDate(dt){
+      if(!dt) return '';
+      const d = new Date(dt);
+      const day = d.getUTCDate();
+      const mon = d.toLocaleString('en-GB', { month:'short', timeZone:'UTC' });
+      return `${day}${fmtDaySuffix(day)} ${mon}`;
+    }
+
+    function makeIconForStatus(st){
+      let cls = 'blue', label = 'B';
+      if(st === 'C'){ cls = 'orange'; label = 'C'; }
+      if(st === 'DC'){ cls = 'grey'; label = 'DC'; }
+      return L.divIcon({
+        className:'custom-pin',
+        html:`<div class="pin ${cls}">${label}</div>`,
+        iconSize:[28,28],
+        iconAnchor:[14,14]
+      });
+    }
+
+    function fitToVisibleMarkers(){
+      const visible = jobs.filter(j=>j.marker && map.hasLayer(j.marker));
+      if(visible.length===0) return;
+      const g = L.featureGroup(visible.map(j=>j.marker));
+      map.fitBounds(g.getBounds().pad(0.2));
+    }
+
+    function parseCSV(text){
+      const rows = [];
+      let cur = [], field = '', inQuotes=false, i=0;
+      function endField(){ cur.push(field); field=''; }
+      function endRow(){ rows.push(cur); cur=[]; }
+
+      while(i < text.length){
+        const c = text[i];
+        if(inQuotes){
+          if(c === '"'){
+            if(text[i+1] === '"'){ field += '"'; i+=2; continue; }
+            inQuotes = false; i++; continue;
+          } else { field += c; i++; continue; }
+        }else{
+          if(c === '"'){ inQuotes = true; i++; continue; }
+          if(c === ','){ endField(); i++; continue; }
+          if(c === '\r'){ i++; continue; }
+          if(c === '\n'){ endField(); endRow(); i++; continue; }
+          field += c; i++; continue;
+        }
       }
-      // Mount inside our custom pane
-      const pane = map.getPane('brandPane');
-      if (wm.parentElement !== pane) pane.appendChild(wm);
-    })();
-    /* --------------------------------------------------------------------- */
+      endField();
+      if(cur.length>1 || rows.length===0 || rows[rows.length-1]!==cur) endRow();
+      const headers = rows.shift().map(h=>String(h).trim());
+      return { headers, rows };
+    }
 
-    const markers=new Map();
+    function headerIndexMap(headers){
+      const iTrack = headers.findIndex(h=>h.trim().toLowerCase()==='tracking no');
+      const iStat  = headers.findIndex(h=>h.trim().toLowerCase()==='shipment status');
+      const iAddr  = headers.findIndex(h=>h.trim().toLowerCase()==='receiver address');
+      const iDate  = headers.findIndex(h=>h.trim().toLowerCase()==='ready date');
+      return { iTrack, iStat, iAddr, iDate };
+    }
 
-    // Gold ring navy-blue dot pin
-    const goldIcon = L.divIcon({
-      className: 'custom-pin',
-      html: '<div style="width:16px;height:16px;border:3px solid var(--gold);background:var(--navy);border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.6);"></div>',
-      iconSize: [16,16],
-      iconAnchor: [8,8]
+    function statusAllowed(st){
+      const showB  = document.getElementById('fB').checked;
+      const showC  = document.getElementById('fC').checked;
+      const showDC = document.getElementById('fDC').checked;
+      return (st==='B' && showB) || (st==='C' && showC) || (st==='DC' && showDC);
+    }
+
+    function refreshMarkersFromFilters(){
+      jobs.forEach(j=>{
+        if(!j.marker) return;
+        if(statusAllowed(j.status)){
+          if(!map.hasLayer(j.marker)) j.marker.addTo(map);
+        }else{
+          if(map.hasLayer(j.marker)) map.removeLayer(j.marker);
+        }
+      });
+    }
+
+    function renderJobsList(){
+      const filtered = jobs
+        .filter(j=>statusAllowed(j.status))
+        .sort((a,b)=>{
+          const ad = a.readyDate ? a.readyDate.getTime() : 0;
+          const bd = b.readyDate ? b.readyDate.getTime() : 0;
+          return bd - ad;
+        });
+
+      jobsList.innerHTML = '';
+      if(filtered.length===0){
+        const p = document.createElement('div');
+        p.className='summary';
+        p.style.padding='.4rem';
+        p.textContent='No jobs match current filters.';
+        jobsList.appendChild(p);
+        return;
+      }
+
+      filtered.forEach(j=>{
+        const el = document.createElement('div');
+        el.className='job';
+
+        const dateHTML = `
+          <div class="date">
+            <div class="label">Ready Date</div>
+            <div class="val">${j.readyDateStr || ''}</div>
+          </div>
+        `;
+        const whoHTML = `
+          <div>
+            <div class="who">${j.trackingNo || '(no tracking)'}</div>
+            <div class="pc">${j.postcode || ''}</div>
+          </div>
+        `;
+        const statusHTML = `<div class="status">${j.status}</div>`;
+
+        el.innerHTML = dateHTML + whoHTML + statusHTML;
+        el.onclick = ()=>{ if(j.marker){ map.flyTo(j.marker.getLatLng(), 12); j.marker.openPopup(); } };
+        jobsList.appendChild(el);
+      });
+    }
+
+    function rerenderAll(){
+      refreshMarkersFromFilters();
+      renderJobsList();
+    }
+
+    async function addJobFromParts({trackingNo, status, address, readyDate, postcode}, rowIndexForFail){
+      if(!postcode) postcode = extractPostcode(address);
+      if(!postcode){
+        failedRows.push({rowIndex: rowIndexForFail, trackingNo, status, address, readyDate, reason:'No postcode found', rawRow:{trackingNo,status,address,readyDate}});
+        return false;
+      }
+
+      const stat = normalizeStatus(status);
+      if(!stat){
+        failedRows.push({rowIndex: rowIndexForFail, trackingNo, status, address, readyDate, reason:'Bad status', rawRow:{trackingNo,status,address,readyDate}});
+        return false;
+      }
+
+      const dt = parseDateAny(readyDate);
+      const readyDateStr = dt ? fmtReadyDate(dt) : '';
+
+      let lat=null, lon=null;
+      try{
+        const url='https://api.postcodes.io/postcodes/'+encodeURIComponent(postcode);
+        const res=await fetch(url);
+        if(!res.ok) throw new Error('Lookup failed');
+        const json=await res.json();
+        if(json.status!==200||!json.result) throw new Error(json.error||'Not found');
+        lat = json.result.latitude; lon = json.result.longitude;
+      }catch(err){
+        failedRows.push({rowIndex: rowIndexForFail, trackingNo, status:stat, address, readyDate, reason: 'Geocode failed: '+err.message, rawRow:{trackingNo,status,address,readyDate}});
+        return false;
+      }
+
+      const icon = makeIconForStatus(stat);
+      const marker = L.marker([lat,lon], { icon }).addTo(map);
+      marker.bindPopup(`
+        <div style="font-family:Play,system-ui;-webkit-font-smoothing:antialiased;">
+          <div><strong>${trackingNo || '(no tracking)'}</strong></div>
+          <div>${postcode}</div>
+          <div>Status: <strong>${stat}</strong></div>
+          ${readyDateStr?`<div>Ready: ${readyDateStr}</div>`:''}
+        </div>
+      `.trim());
+
+      jobs.push({trackingNo, status:stat, address, readyDate:dt||null, readyDateStr, postcode, lat, lon, marker});
+      return true;
+    }
+
+    importBtn.addEventListener('click', async ()=>{
+      const f = fileInput.files?.[0];
+      if(!f){ alert('Please choose a CSV file first.'); return; }
+
+      const text = await f.text();
+      const { headers, rows } = parseCSV(text);
+      const { iTrack, iStat, iAddr, iDate } = headerIndexMap(headers);
+
+      const missing = [];
+      if(iTrack<0) missing.push('Tracking No');
+      if(iStat<0)  missing.push('Shipment Status');
+      if(iAddr<0)  missing.push('Receiver Address');
+      if(iDate<0)  missing.push('Ready Date');
+      if(missing.length){
+        alert('Missing CSV header(s): ' + missing.join(', '));
+        return;
+      }
+
+      failedRows = [];
+      let ok = 0, fail = 0;
+
+      for(let r=0; r<rows.length; r++){
+        const row = rows[r];
+        const trackingNo = (row[iTrack] ?? '').trim();
+        const status      = (row[iStat] ?? '').trim();
+        const address     = (row[iAddr] ?? '').trim();
+        const readyDate   = (row[iDate] ?? '').trim();
+
+        const success = await addJobFromParts({trackingNo, status, address, readyDate}, r+2);
+        if(success) ok++; else fail++;
+      }
+
+      rerenderAll();
+      fitToVisibleMarkers();
+
+      importSummary.innerHTML = `Imported: <strong>${ok} ok</strong>, <strong>${fail} failed</strong>.`;
+      downloadFailedBtn.style.display = failedRows.length ? 'inline-block' : 'none';
+    });
+
+    downloadFailedBtn.addEventListener('click', ()=>{
+      if(!failedRows.length) return;
+      const headers = ['Row','Tracking No','Shipment Status','Receiver Address','Ready Date','Reason'];
+      const esc = (v)=> {
+        const s = (v===null||v===undefined)?'':String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+      };
+      const lines = [headers.join(',')];
+      failedRows.forEach(fr=>{
+        lines.push([
+          fr.rowIndex,
+          fr.rawRow?.trackingNo ?? '',
+          fr.rawRow?.status ?? '',
+          fr.rawRow?.address ?? '',
+          fr.rawRow?.readyDate ?? '',
+          fr.reason ?? ''
+        ].map(esc).join(','));
+      });
+      const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'failed_rows.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     });
 
     function normalizePC(input){
@@ -136,89 +564,42 @@
         .trim();
     }
 
-    async function geocodePostcode(pc){
-      const url='https://api.postcodes.io/postcodes/'+encodeURIComponent(pc);
-      const res=await fetch(url);
-      if(!res.ok) throw new Error('Lookup failed');
-      const json=await res.json();
-      if(json.status!==200||!json.result) throw new Error(json.error||'Not found');
-      return { lat:json.result.latitude, lon:json.result.longitude };
-    }
-
-    function renderList(){
-      const list=document.getElementById('list');
-      list.innerHTML='';
-      if(markers.size===0){
-        const p=document.createElement('div');
-        p.className='muted';
-        p.style.padding='.35rem .45rem';
-        p.textContent='No pins yet. Add one above.';
-        list.appendChild(p);
-        return;
-      }
-      const sortedKeys=[...markers.keys()].sort((a,b)=>a.localeCompare(b));
-      sortedKeys.forEach(pc=>{
-        const {marker}=markers.get(pc);
-        const row=document.createElement('div');
-        row.className='row';
-        const left=document.createElement('div');
-        left.innerHTML=`<span class="pc">${pc}</span>`;
-        left.onclick=()=>{map.flyTo(marker.getLatLng(),12);marker.openPopup();};
-        const actions=document.createElement('div');
-        const del=document.createElement('button');
-        del.className='iconbtn';
-        del.textContent='Remove';
-        del.onclick=()=>removePostcode(pc);
-        actions.appendChild(del);
-        row.appendChild(left);
-        row.appendChild(actions);
-        list.appendChild(row);
+    function getManualStatus(){
+      let val = 'B';
+      document.querySelectorAll('input[name="manualStatus"]').forEach(r=>{
+        if(r.checked) val = r.value;
       });
+      return val;
     }
 
-    function addMarker(pc,lat,lon){
-      const marker=L.marker([lat,lon],{icon:goldIcon}).addTo(map);
-      marker.bindPopup(`<strong>${pc}</strong>`);
-      markers.set(pc,{marker});
-      renderList();
-    }
-
-    function removePostcode(pc){
-      const i=markers.get(pc);
-      if(!i) return;
-      map.removeLayer(i.marker);
-      markers.delete(pc);
-      renderList();
-    }
-
-    function fitToAll(){
-      if(markers.size===0) return;
-      const g=L.featureGroup([...markers.values()].map(v=>v.marker));
-      map.fitBounds(g.getBounds().pad(0.2));
-    }
-
-    async function addFromInput(){
-      const input=document.getElementById('pcInput');
-      const raw=input.value.trim();
+    addBtn.addEventListener('click', async ()=>{
+      const raw = pcInput.value.trim();
       if(!raw) return;
-      const pcs=raw.split(/[\n,;]+/).map(s=>normalizePC(s)).filter(Boolean);
-      for(const pc of pcs){
-        if(markers.has(pc)) continue;
-        try{
-          const g=await geocodePostcode(pc);
-          addMarker(pc,g.lat,g.lon);
-        }catch(err){
-          alert(`Could not add ${pc}: ${err.message}`);
-        }
-      }
-      input.value='';
-      fitToAll();
-    }
+      const pc = normalizePC(raw);
+      pcInput.value='';
 
-    document.getElementById('addBtn').onclick=addFromInput;
-    document.getElementById('pcInput').addEventListener('keydown',e=>{if(e.key==='Enter')addFromInput();});
-    document.getElementById('fitBtn').onclick=fitToAll;
-    document.getElementById('clearBtn').onclick=()=>{if(confirm('Remove all pins?'))[...markers.keys()].forEach(removePostcode);};
+      const chosenStatus = getManualStatus();
+
+      const ok = await addJobFromParts({
+        trackingNo:'',
+        status: chosenStatus,
+        address: pc,
+        readyDate:'',
+        postcode: pc
+      }, 0);
+      if(!ok) alert('Could not add that postcode. Check the value and try again.');
+
+      rerenderAll();
+      fitToVisibleMarkers();
+    });
+
+    pcInput.addEventListener('keydown', e=>{
+      if(e.key==='Enter') addBtn.click();
+    });
+
+    [fB,fC,fDC].forEach(cb=> cb.addEventListener('change', ()=>{
+      rerenderAll();
+    }));
   </script>
 </body>
 </html>
